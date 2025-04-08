@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>QRコード生成ツール (6文字固定版)</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrious/4.0.2/qrious.min.js"></script>
+  <style>
+    /* 基本的なスタイル */
+    body {
+      font-family: sans-serif;
+      margin: 0;
+      padding: 0;
+      text-align: center;
+      display: flex;
+      justify-content: space-between;
+      min-height: 100vh; /* 画面の高さいっぱいに広げる */
+    }
+    /* メインコンテンツコンテナ */
+    .container {
+      margin-top: 20px; /* 上部のマージンを少し減らす */
+      flex-grow: 1;
+      padding: 10px; /* パディングを追加 */
+      display: flex; /* Flexbox を使用 */
+      flex-direction: column; /* 縦方向に配置 */
+      align-items: center; /* 中央揃え */
+    }
+    /* QRコード表示エリア */
+    #qrCode {
+      margin: 20px auto;
+      display: block;
+      max-width: 90%; /* レスポンシブ対応 */
+      height: auto;
+      border: 1px solid #eee; /* 境界線を追加 */
+    }
+    /* 操作パネル */
+    .control-panel {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+    /* 入力欄（備考、名前） */
+    .wide-input {
+      width: 150px;
+      padding: 5px;
+      margin: 5px; /* 上下のマージンを追加 */
+    }
+    /* 生成された文字列表示エリア */
+    #randomText {
+       word-wrap: break-word;
+      overflow-wrap: break-word;
+      max-width: 80%;
+      margin: 10px auto; /* 上下のマージンを調整 */
+      white-space: pre-wrap;
+      display: block;
+      font-family: monospace; /* 等幅フォントで見やすく */
+      font-size: 1.1em; /* 少し大きく */
+      min-height: 1.5em; /* 最低限の高さを確保 */
+      border: 1px dashed #ccc; /* 境界線を追加 */
+      padding: 5px; /* 内側のパディング */
+    }
+    /* 履歴コンテナ */
+    .history-container {
+      width: 200px;
+      background: #f9f9f9;
+      border-left: 1px solid #ccc;
+      padding: 10px;
+      height: 100vh; /* 高さを画面に合わせる */
+      overflow-y: auto;
+      box-sizing: border-box; /* paddingを含めて高さを計算 */
+    }
+    .history-container h3 {
+      font-size: 16px;
+      margin-top: 0; /* 上マージンを削除 */
+    }
+    #history {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+      text-align: left;
+    }
+    #history li {
+      margin: 5px 0;
+      padding: 5px; /* パディングを追加 */
+      word-break: break-all;
+      font-size: 0.9em; /* 少し小さく */
+      border-bottom: 1px solid #eee; /* 区切り線 */
+    }
+    #history li:last-child {
+        border-bottom: none; /* 最後の要素の線は消す */
+    }
+    /* 選択肢グリッド */
+    .select-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+      gap: 10px; /* 少し広げる */
+      justify-content: center;
+      margin-top: 15px; /* 上マージンを調整 */
+      max-width: 600px;
+      width: 100%; /* 幅を親要素に合わせる */
+      margin-left: auto;
+      margin-right: auto;
+    }
+    .select-container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    select {
+        padding: 5px;
+        width: 100%; /* 幅をコンテナに合わせる */
+    }
+    /* ボタンのスタイル */
+    button {
+        padding: 8px 15px;
+        cursor: pointer;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+        background-color: #f0f0f0;
+        transition: background-color 0.2s;
+    }
+    button:hover {
+        background-color: #e0e0e0;
+    }
+    .download-container {
+        margin-top: 15px;
+    }
+
+    /* レスポンシブ対応 */
+    @media (max-width: 768px) {
+      body {
+        flex-direction: column;
+        justify-content: flex-start;
+        align-items: center;
+      }
+
+      .container {
+        width: 100%;
+        padding: 10px;
+        box-sizing: border-box; /* padding を含めて幅を計算 */
+      }
+
+      .control-panel {
+        flex-wrap: wrap;
+      }
+
+      .history-container {
+        width: 100%;
+        border-left: none;
+        border-top: 1px solid #ccc;
+        height: auto; /* 高さを自動調整 */
+        min-height: 150px;
+        max-height: 30vh; /* 最大高さを制限 */
+        box-sizing: border-box;
+      }
+
+      .select-grid {
+        grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+        max-width: 100%;
+      }
+
+      .wide-input {
+        width: 80%; /* 幅を調整 */
+      }
+
+      #qrCode {
+        max-width: 80%; /* QRコードの最大幅を調整 */
+      }
+    }
+  </style>
+</head>
+<body>
+ <div class="container">
+    <h2>QRコード生成君 (6文字固定版)</h2>
+    <p>下のボタンを押すと、小文字英字6文字のQRコードが生成されます。</p>
+     <div class="control-panel">
+      <button id="generateBtn">QRコードを生成</button>
+     </div>
+    <p>生成された文字列:</p>
+    <p id="randomText">(ここに文字列が表示されます)</p>
+    <canvas id="qrCode"></canvas>
+
+    <div class="select-grid">
+      <div class="select-container">
+        <label for="avoidance">回避率:</label>
+        <select id="avoidance">
+          <option value="" selected></option>
+          <option value="回避0">回避0</option>
+          <option value="回避3">回避3</option>
+          <option value="回避3+">回避3+</option>
+          <option value="回避3-">回避3-</option>
+          <option value="回避6">回避6</option>
+          <option value="回避10">回避10</option>
+          <option value="回避15">回避15</option>
+        </select>
+      </div>
+
+      <div class="select-container">
+        <label for="body">体格:</label>
+        <select id="body">
+          <option value="" selected></option>
+          <option value="最速">最速</option>
+          <option value="準速">準速</option>
+          <option value="標準">標準</option>
+          <option value="準大">準大</option>
+          <option value="最大">最大</option>
+        </select>
+      </div>
+
+      <div class="select-container">
+        <label for="shade">濃淡:</label>
+        <select id="shade">
+          <option value="" selected></option>
+          <option value="濃">濃</option>
+          <option value="薄">薄</option>
+        </select>
+      </div>
+
+      <div class="select-container">
+        <label for="color">色:</label>
+        <select id="color">
+          <option value="" selected></option>
+          <option value="黒">黒</option>
+          <option value="白">白</option>
+          <option value="赤">赤</option>
+          <option value="青">青</option>
+          <option value="水">水</option>
+          <option value="紫">紫</option>
+          <option value="緑">緑</option>
+          <option value="橙">橙</option>
+          <option value="黄">黄</option>
+        </select>
+      </div>
+
+      <div class="select-container">
+        <label for="shape">形:</label>
+        <select id="shape">
+          <option value="" selected></option>
+          <option value="丸">丸</option>
+          <option value="三角">三角</option>
+          <option value="四角">四角</option>
+          <option value="縦楕円">縦楕円</option>
+          <option value="横楕円">横楕円</option>
+          <option value="石鹸">石鹸</option>
+        </select>
+      </div>
+
+      <div class="select-container">
+        <label for="antenna">アンテナ:</label>
+        <select id="antenna">
+          <option value="" selected></option>
+          <option value="アンテナなし">アンテナなし</option>
+          <option value="ふっかつ">ふっかつ</option>
+          <option value="かいふく">かいふく</option>
+          <option value="むてき">むてき</option>
+          <option value="たくわえる">たくわえる</option>
+          <option value="よけにくい">よけにくい</option>
+          <option value="ノックダウン">ノックダウン</option>
+          <option value="ぜんぶなおす">ぜんぶなおす</option>
+          <option value="ぞくせいなおす">ぞくせいなおす</option>
+          <option value="こうふん">こうふん</option>
+          <option value="あしもとガード">あしもとガード</option>
+          <option value="おそくなれ">おそくなれ</option>
+          <option value="よわくなれ">よわくなれ</option>
+          <option value="やわくなれ">やわくなれ</option>
+          <option value="はやくなれ">はやくなれ</option>
+          <option value="つよくなれ">つよくなれ</option>
+          <option value="かたくなれ">かたくなれ</option>
+          <option value="よけやすい">よけやすい</option>
+          <option value="どくになれ">どくになれ</option>
+          <option value="めかくし">めかくし</option>
+          <option value="しびれさせる">しびれさせる</option>
+          <option value="ねむらせる">ねむらせる</option>
+          <option value="げどく">げどく</option>
+          <option value="しびれとる">しびれとる</option>
+          <option value="めざめる">めざめる</option>
+          <option value="単体火">単体火</option>
+          <option value="単体水">単体水</option>
+          <option value="単体電気">単体電気</option>
+          <option value="単体土">単体土</option>
+          <option value="単体風">単体風</option>
+          <option value="単体氷">単体氷</option>
+          <option value="単体闇">単体闇</option>
+          <option value="単体光">単体光</option>
+          <option value="3体火">3体火</option>
+          <option value="3体水">3体水</option>
+          <option value="3体電気">3体電気</option>
+          <option value="3体土">3体土</option>
+          <option value="3体風">3体風</option>
+          <option value="3体氷">3体氷</option>
+          <option value="3体闇">3体闇</option> <option value="3体光">3体光</option> </select>
+      </div>
+    </div>
+
+    <div>
+      <label for="remarks">備考欄:</label>
+      <input type="text" id="remarks" class="wide-input" placeholder="備考を入力">
+      <label for="name">名前:</label>
+      <input type="text" id="name" class="wide-input" placeholder="名前を入力 (任意)">
+    </div>
+
+    <div class="download-container">
+      <button id="downloadBtn">ダウンロード</button>
+    </div>
+  </div>
+
+  <div class="history-container">
+    <h3>履歴 (最新10件)</h3>
+    <ul id="history"></ul>
+  </div>
+
+  <script>
+    // グローバル変数として履歴リストを定義
+    let historyList = [];
+    // QRiousライブラリが読み込まれているか確認
+    if (typeof QRious === 'undefined') {
+        alert("QRコード生成ライブラリ(qrious.min.js)が見つかりません。");
+    }
+
+    /**
+     * 指定された長さのランダムな小文字英字文字列を生成する関数
+     * @param {number} length - 生成する文字列の長さ
+     * @returns {string} - 生成されたランダム文字列
+     */
+    function generateRandomLowercaseString(length) {
+      // 使用する文字セット（小文字英字のみ）
+      const characters = "abcdefghijklmnopqrstuvwxyz";
+      let result = "";
+      const charactersLength = characters.length;
+      for (let i = 0; i < length; i++) {
+        // 安全な乱数生成 crypto.getRandomValues を使用 (利用可能な場合)
+        if (window.crypto && window.crypto.getRandomValues) {
+            const randomArray = new Uint32Array(1);
+            window.crypto.getRandomValues(randomArray);
+            result += characters.charAt(randomArray[0] % charactersLength);
+        } else {
+            // フォールバックとして Math.random を使用
+            result += characters.charAt(Math.floor(Math.random() * charactersLength));
+        }
+      }
+      return result;
+    }
+
+    /**
+     * QRコードを生成し、表示する関数
+     */
+    function generateQRCode() {
+      // 固定長6文字の小文字英字文字列を生成
+      const fixedLength = 6;
+      let text = generateRandomLowercaseString(fixedLength);
+      console.log("生成された文字列:", text); // デバッグ用
+
+      if (!text) {
+        alert("文字列が生成されませんでした。");
+        return;
+      }
+      // 生成された文字列を表示
+      document.getElementById('randomText').textContent = text;
+
+      // QRコードのサイズを固定（例: 200px）
+      let qrSize = 200;
+
+      // QRコードを表示する canvas を取得
+      let qrCanvas = document.getElementById('qrCode');
+      // canvasが存在しない場合のエラーハンドリング
+      if (!qrCanvas) {
+          console.error("Canvas要素 'qrCode' が見つかりません。");
+          alert("QRコードを表示する領域が見つかりません。");
+          return;
+      }
+      qrCanvas.width = qrSize;
+      qrCanvas.height = qrSize;
+
+      try {
+          // QRコードを生成
+          new QRious({
+            element: qrCanvas,
+            value: text,
+            size: qrSize,
+            level: 'M', // 誤り訂正レベル (L, M, Q, H) - Mが一般的
+            padding: 10, // QRコード周囲の余白
+            background: '#ffffff', // 背景色
+            foreground: '#000000'  // 前景色 (QRコードの色)
+          });
+
+          // プルダウンと備考欄、名前欄をリセット
+          document.getElementById('avoidance').value = "";
+          document.getElementById('body').value = "";
+          document.getElementById('shade').value = "";
+          document.getElementById('color').value = "";
+          document.getElementById('shape').value = "";
+          document.getElementById('antenna').value = "";
+          document.getElementById('remarks').value = "";
+          document.getElementById('name').value = "";
+
+          // 履歴を更新
+          updateHistory(text);
+      } catch (error) {
+          console.error("QRコードの生成中にエラーが発生しました:", error);
+          alert("QRコードの生成に失敗しました。");
+      }
+    }
+
+    /**
+     * 履歴リストを更新し、表示を再描画する関数
+     * @param {string} text - 履歴に追加する文字列
+     */
+    function updateHistory(text) {
+      // 履歴リストの先頭に追加
+      historyList.unshift(text);
+      // 履歴が10件を超えたら末尾を削除
+      if (historyList.length > 10) {
+        historyList.pop();
+      }
+      // 履歴表示を更新
+      renderHistory();
+    }
+
+    /**
+     * 履歴リストをHTMLに描画する関数
+     */
+    function renderHistory() {
+      let historyElement = document.getElementById('history');
+      // 要素が存在しない場合のエラーハンドリング
+      if (!historyElement) {
+          console.error("履歴表示要素 'history' が見つかりません。");
+          return;
+      }
+      // 現在の履歴表示をクリア
+      historyElement.innerHTML = '';
+
+      // 履歴リストの各項目をリストアイテムとして追加
+      historyList.forEach((item) => {
+        let li = document.createElement('li');
+        li.textContent = item;
+        historyElement.appendChild(li);
+        // 区切り線はCSSで描画するため、ここでは追加しない
+      });
+    }
+
+    /**
+     * 生成されたQRコードをファイルとしてダウンロードする関数
+     */
+    function downloadQRCode() {
+      let qrCanvas = document.getElementById('qrCode');
+      // canvas や QRious インスタンスがない場合は処理しない
+      if (!qrCanvas || !qrCanvas.toDataURL) { // toDataURL が存在するか確認
+        alert("QRコードが生成されていないか、表示領域が見つかりません。");
+        return;
+      }
+
+      // QRコードの元になった文字列を取得（履歴の最新を使用）
+      const qrText = historyList.length > 0 ? historyList[0] : "qrcode"; // 履歴がない場合のデフォルト
+
+      // QRコードのサイズとマージン
+      let qrSize = qrCanvas.width;
+      let margin = 20; // 画像の余白
+
+      // ダウンロード用の新しいCanvasを作成
+      let newCanvas = document.createElement('canvas');
+      newCanvas.width = qrSize + margin * 2;
+      newCanvas.height = qrSize + margin * 2;
+      let ctx = newCanvas.getContext('2d');
+
+      // 背景を白で塗りつぶす
+      ctx.fillStyle = "#FFFFFF";
+      ctx.fillRect(0, 0, newCanvas.width, newCanvas.height);
+      // QRコードを中央に描画
+      ctx.drawImage(qrCanvas, margin, margin, qrSize, qrSize);
+
+      // ダウンロード用のリンクを作成
+      let link = document.createElement('a');
+
+      // 各プルダウンの値を取得
+      let avoidance = document.getElementById('avoidance').value;
+      let body = document.getElementById('body').value;
+      let shade = document.getElementById('shade').value;
+      let color = document.getElementById('color').value;
+      let shape = document.getElementById('shape').value;
+      let antenna = document.getElementById('antenna').value;
+
+      // 備考欄と名前を取得
+      let remarks = document.getElementById('remarks').value.trim();
+      // 名前のデフォルト値をQRコードの文字列にする
+      let name = document.getElementById('name').value.trim() || qrText;
+
+      // ファイル名のパーツを格納する配列
+      let fileNameParts = [];
+
+      // プルダウン群（選択されていれば追加）
+      if (avoidance) fileNameParts.push(avoidance);
+      if (body) fileNameParts.push(body);
+
+      // 濃淡 + 色（両方あれば結合、片方ならそれだけ）
+      if (shade && color) {
+        fileNameParts.push(shade + color);
+      } else if (shade) {
+        fileNameParts.push(shade);
+      } else if (color) {
+        fileNameParts.push(color);
+      }
+
+      if (shape) fileNameParts.push(shape);
+      if (antenna) fileNameParts.push(antenna);
+
+      // 備考欄（存在すれば追加）
+      if (remarks) fileNameParts.push(remarks);
+
+      // 最後に名前を追加
+      fileNameParts.push(name);
+
+      // ファイル名を結合して作成（アンダースコア区切り）
+      let fileName = fileNameParts.join("_") + ".png";
+      // ファイル名に使えない文字を置換（例）
+      fileName = fileName.replace(/[/\\?%*:|"<>]/g, '-');
+
+      // QRコードをダウンロード
+      link.href = newCanvas.toDataURL("image/png");
+      link.download = fileName;
+      link.click(); // リンクをクリックしてダウンロードを開始
+    }
+
+    // --- イベントリスナーの設定 ---
+    // ページ読み込み完了時の処理
+    window.onload = function () {
+      console.log("ページが完全に読み込まれました");
+      // JavaScriptが有効であることを示すクラスをbodyに追加
+      document.body.classList.add("js-enabled");
+
+      // ボタン要素を取得
+      const generateBtn = document.getElementById("generateBtn");
+      const downloadBtn = document.getElementById("downloadBtn");
+
+      // ボタンが存在するか確認してからイベントリスナーを追加
+      if (generateBtn) {
+          generateBtn.addEventListener("click", generateQRCode);
+      } else {
+          console.error("ボタン 'generateBtn' が見つかりません。");
+      }
+
+      if (downloadBtn) {
+          downloadBtn.addEventListener("click", downloadQRCode);
+      } else {
+          console.error("ボタン 'downloadBtn' が見つかりません。");
+      }
+
+      // 初期状態でQRコードを生成（任意）
+      // generateQRCode();
+    };
+
+    // Enterキーで生成する機能は文字数入力欄がないため不要
+
+  </script>
+</body>
+</html>
